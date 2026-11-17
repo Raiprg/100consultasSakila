@@ -939,6 +939,29 @@ FROM
         JOIN
     category USING (category_id)
 GROUP BY store.store_id , category.category_id;
+-- NO HE SIDO CAPAZ DE SACARLA
+-- Claude AI
+SELECT 
+    staff.store_id,
+    category.category_id,
+    category.name,
+    SUM(payment.amount) AS recaudacion
+FROM
+    payment
+        JOIN
+    staff USING (staff_id)
+        JOIN
+    rental USING (rental_id)
+        JOIN
+    inventory USING (inventory_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    film_category USING (film_id)
+        JOIN
+    category USING (category_id)
+GROUP BY staff.store_id , category.category_id , category.name
+ORDER BY category.category_id , staff.store_id DESC;
 
 -- 73:  Para cada actor, cuenta en cuántas tiendas distintas se han alquilado sus películas.
 SELECT 
@@ -1079,23 +1102,297 @@ GROUP BY country.country_id;
 -- SECCIÓN D) 20 CONSULTAS EXTRA (DIFICULTAD +), <=4 JOINS
 -- ==============================================
 -- 81:  Para cada cliente, muestra el total pagado con IVA teórico del 21% aplicado (total*1.21), redondeado a 2 decimales.
+SELECT 
+    customer_id,
+    CONCAT(first_name, ' ', last_name) AS nombre_cliente,
+    ROUND(SUM(amount) * 1.21, 2) AS total_IVA
+FROM
+    customer
+        JOIN
+    payment USING (customer_id)
+GROUP BY customer_id;
+
 -- 82:  Para cada hora del día (0-23), cuenta cuántos alquileres se iniciaron en esa hora.
+SELECT 
+    HOUR(rental_date) AS hora, COUNT(rental_id) AS alquileres
+FROM
+    rental
+GROUP BY HOUR(rental_date);
+
 -- 83:  Para cada tienda, muestra la media de length de las películas alquiladas en 2005 y filtra las tiendas con media >= 100.
+SELECT 
+    store.store_id, AVG(film.length) AS duracion_media
+FROM
+    store
+        JOIN
+    inventory USING (store_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+WHERE
+    YEAR(rental_date) = 2005
+GROUP BY store.store_id
+HAVING AVG(film.length) >= 100;
+
 -- 84:  Para cada categoría, muestra la media de replacement_cost de las películas alquiladas un domingo.
+SELECT 
+    category.category_id,
+    category.name,
+    AVG(film.replacement_cost) AS media_replace_cost
+FROM
+    category
+        JOIN
+    film_category USING (category_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+WHERE
+    DAYOFWEEK(rental_date) = 1
+GROUP BY category_id;   
+ 
 -- 85:  Para cada empleado, muestra el importe total por pagos realizados entre las 00:00 y 06:00 (inclusive 00:00, exclusivo 06:00).
+SELECT 
+    staff.staff_id,
+    CONCAT(first_name, ' ', last_name) AS nombre_empleado,
+    SUM(payment.amount) AS importe_total
+FROM
+    staff
+        JOIN
+    payment USING (staff_id)
+WHERE
+    TIME(payment_date) >= '00:00:00'
+        AND TIME(payment_date) < '06:00:00'
+GROUP BY staff_id;
+
 -- 86:  Para cada actor, cuenta cuántas de sus películas tienen un título que contiene la palabra 'LOVE' (mayúsculas).
+SELECT 
+    actor.actor_id,
+    CONCAT(actor.first_name, ' ', actor.last_name) AS actor,
+    COUNT(film.film_id) AS num_pelis_love
+FROM
+    actor
+        JOIN
+    film_actor USING (actor_id)
+        JOIN
+    film USING (film_id)
+WHERE
+    film.title LIKE '%LOVE%'
+GROUP BY actor_id;
+
 -- 87:  Para cada idioma, muestra el total de pagos de alquileres de películas en ese idioma.
+SELECT 
+    language.language_id,
+    language.name,
+    SUM(payment.amount) AS total_pagos
+FROM
+    language
+        JOIN
+    film USING (language_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+        JOIN
+    payment USING (rental_id)
+GROUP BY language_id;
+
 -- 88:  Para cada cliente, cuenta en cuántos días distintos de 2005 realizó algún alquiler.
+SELECT 
+    customer.customer_id,
+    CONCAT(first_name, ' ', last_name) AS cliente,
+    COUNT(DISTINCT (DAYOFYEAR(rental_date)))
+FROM
+    customer
+        JOIN
+    rental USING (customer_id)
+WHERE
+    YEAR(rental_date) = '2005'
+GROUP BY customer.customer_id;
+
 -- 89:  Para cada categoría, calcula la longitud media de títulos (número de caracteres) de sus películas alquiladas.
+SELECT 
+    category.category_id,
+    category.name,
+    AVG(LENGTH(film.title)) AS longitud_media_titulos
+FROM
+    category
+        JOIN
+    film_category USING (category_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+GROUP BY category_id;
+
 -- 90:  Para cada tienda, cuenta cuántos clientes distintos alquilaron en el primer trimestre de 2006 (enero-marzo).
+SELECT 
+    store.store_id,
+    COUNT(DISTINCT (customer.customer_id)) AS clientes
+FROM
+    store
+        JOIN
+    customer USING (store_id)
+        JOIN
+    rental USING (customer_id)
+WHERE
+    YEAR(rental_date) = '2006'
+        AND MONTH(rental_date) BETWEEN '1' AND '3'
+GROUP BY store_id;
+
 -- 91:  Para cada país, cuenta cuántas categorías diferentes han sido alquiladas por clientes residentes en ese país.
+SELECT 
+    country.country_id,
+    country.country,
+    COUNT(DISTINCT (film_category.category_id)) AS categorias_distintas
+FROM
+    country
+        JOIN
+    city USING (country_id)
+        JOIN
+    address USING (city_id)
+        JOIN
+    customer USING (address_id)
+        JOIN
+    rental USING (customer_id)
+        JOIN
+    inventory USING (inventory_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    film_category USING (film_id)
+GROUP BY country_id;
+
 -- 92:  Para cada cliente, muestra el importe medio de sus pagos redondeado a 2 decimales, solo si ha hecho al menos 10 pagos.
+SELECT 
+    customer.customer_id,
+    CONCAT(customer.first_name, ' ', customer.last_name) AS cliente,
+    ROUND(AVG(payment.amount), 2) AS importe_medio
+FROM
+    customer
+        JOIN
+    payment USING (customer_id)
+GROUP BY customer.customer_id
+HAVING COUNT(payment.amount) >= 10;
+
 -- 93:  Para cada categoría, muestra el número de películas con replacement_cost > 20 que hayan sido alquiladas al menos una vez.
+SELECT 
+    category.category_id,
+    category.name,
+    COUNT(DISTINCT (film.film_id)) AS peliculas
+FROM
+    category
+        JOIN
+    film_category USING (category_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+WHERE
+    film.replacement_cost > 20
+GROUP BY category_id;
+
 -- 94:  Para cada tienda, suma los importes pagados en fines de semana.
+SELECT 
+    store.store_id, SUM(payment.amount) AS importes_pagados
+FROM
+    store
+        JOIN
+    staff USING (store_id)
+        JOIN
+    payment USING (staff_id)
+WHERE
+    DAYOFWEEK(payment_date) = '1'
+        OR DAYOFWEEK(payment_date) = '7'
+GROUP BY store_id;
+
 -- 95:  Para cada actor, cuenta cuántas películas suyas fueron alquiladas por al menos 5 clientes distintos (se cuenta alquileres y luego se filtra por HAVING).
+SELECT 
+    actor.actor_id,
+    CONCAT(actor.first_name, ' ', actor.last_name) AS actor,
+    COUNT(DISTINCT (rental.customer_id)) AS alquileres_total
+FROM
+    actor
+        JOIN
+    film_actor USING (actor_id)
+        JOIN
+    film USING (film_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+GROUP BY actor_id
+HAVING COUNT(DISTINCT (rental.customer_id)) >= 5;
+
 -- 96:  Para cada idioma, muestra el número de películas cuyo título empieza por la letra 'A' y que han sido alquiladas.
+SELECT 
+    language_id,
+    language.name,
+    COUNT(DISTINCT (film.film_id)) AS peliculas
+FROM
+    language
+        JOIN
+    film USING (language_id)
+        JOIN
+    inventory USING (film_id)
+        JOIN
+    rental USING (inventory_id)
+WHERE
+    film.title LIKE 'A%'
+GROUP BY language_id;
+
 -- 97:  Para cada país, suma el importe total de pagos realizados por clientes residentes y filtra países con total >= 1000.
+SELECT 
+    country.country_id,
+    country.country,
+    SUM(payment.amount) AS importes_pagados
+FROM
+    country
+        JOIN
+    city USING (country_id)
+        JOIN
+    address USING (city_id)
+        JOIN
+    customer USING (address_id)
+        JOIN
+    payment USING (customer_id)
+GROUP BY country_id
+HAVING SUM(payment.amount) >= 1000;
+
 -- 98:  Para cada cliente, cuenta cuántos días han pasado entre su primer y su último alquiler en 2005 (diferencia de fechas), mostrando solo clientes con >= 5 alquileres en 2005.
 --     (Se evita subconsulta calculando sobre el conjunto agrupado por cliente y usando MIN/MAX de rental_date en 2005).
+SELECT 
+    customer.customer_id,
+    CONCAT(first_name, ' ', last_name) AS nombre_cliente,
+    DATEDIFF(MAX(rental_date), MIN(rental_date))
+FROM
+    customer
+        JOIN
+    rental USING (customer_id)
+WHERE
+    YEAR(rental.rental_date) = '2005'
+GROUP BY customer_id
+HAVING COUNT(customer.customer_id) >= 5; 
+
 -- 99:  Para cada tienda, muestra la media de importes cobrados por transacción en el año 2006, con dos decimales.
+SELECT 
+    store.store_id, ROUND(AVG(payment.amount), 2)
+FROM
+    store
+        JOIN
+    staff USING (store_id)
+        JOIN
+    payment USING (staff_id)
+WHERE
+    YEAR(payment_date) = '2006'
+GROUP BY store_id; 
+
 -- 100:  Para cada categoría, calcula la media de duración (length) de películas alquiladas en 2006 y ordénalas descendentemente por dicha media.
+select category.category_id, category.name, avg(film.length) as duracion_media from category join film_category using(category_id) join film using(film_id) join inventory using(film_id) join rental using(inventory_id) where year(rental_date) = '2006' group by category_id order by avg(film.length) desc;
